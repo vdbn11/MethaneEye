@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Dataset (not distributed — see README for sources)
+data/ir_images/
+data/masks/
+data/annotations.json
+
+# Model weights (large binaries — train with scripts/train.py)
+models/*.pth
+
+# Generated artifacts
+reports/frames/
+reports/*.log
+tools/capture/
+tools/video/
+tools/deck_shots/
+deliverables/render/
+deliverables/assets/

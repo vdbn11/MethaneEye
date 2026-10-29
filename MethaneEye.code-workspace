@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {
+      "name": "MethaneEye",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "files.exclude": {
+      "**/__pycache__": true
+    }
+  }
+}

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MethaneEye | Pipeline Leak Detection Simulator</title>
+  <link rel="stylesheet" href="/static/vendor/leaflet.css" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 3 43 14v20L24 45 5 34V14Z" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M15 31V17l9 6 9-6v14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+          <circle cx="24" cy="24" r="3.1" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Methane<span>Eye</span></h1>
+        <p>Drone-based methane leak detection &amp; response simulator</p>
+      </div>
+    </div>
+
+    <div class="mission-strip">
+      <div class="strip-item">
+        <span class="label">MISSION</span>
+        <strong id="mission-clock">00:00</strong>
+      </div>
+      <div class="strip-item">
+        <span class="label">PHASE</span>
+        <strong id="phase-label">STANDBY</strong>
+      </div>
+      <div class="strip-item">
+        <span class="label">ROUTE</span>
+        <strong id="route-label">GA</strong>
+      </div>
+      <div class="status-pill" id="status-pill"><i></i><span>READY</span></div>
+    </div>
+
+    <div class="controls">
+      <div class="launch-group">
+        <span class="launch-label">LAUNCH</span>
+        <button class="btn drone-btn n" data-drone="N" title="Launch north drone">N</button>
+        <button class="btn drone-btn e" data-drone="E" title="Launch east drone">E</button>
+        <button class="btn drone-btn s" data-drone="S" title="Launch south drone">S</button>
+        <button class="btn drone-btn w" data-drone="W" title="Launch west drone">W</button>
+        <button class="btn primary" id="btn-start">Launch all</button>
+      </div>
+      <button class="btn" id="btn-reset">Reset</button>
+      <label class="select-wrap">
+        <span>Speed</span>
+        <select id="speed-select">
+          <option value="0.5">0.5x</option>
+          <option value="1">1x</option>
+          <option value="2" selected>2x</option>
+          <option value="5">5x</option>
+          <option value="8">8x</option>
+        </select>
+      </label>
+      <label class="select-wrap">
+        <span>Route</span>
+        <select id="mode-select">
+          <option value="ga" selected>GA optimized</option>
+          <option value="baseline">Pipeline order</option>
+        </select>
+      </label>
+      <div class="auto-toggle" id="auto-toggle">
+        <button class="auto-btn" data-auto="auto">AUTO</button>
+        <button class="auto-btn" data-auto="manual">MANUAL</button>
+      </div>
+      <button class="btn accent" id="btn-verify">Verify pass</button>
+      <button class="btn accent" id="btn-optimize">Re-run GA</button>
+      <label class="switch">
+        <input type="checkbox" id="reveal-truth" />
+        <span>Reveal ground truth</span>
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel map-panel">
+      <div class="panel-head">
+        <div>
+          <span class="eyebrow">OPERATIONS MAP</span>
+          <h2>Abqaiq field &mdash; pipeline integrity sweep</h2>
+        </div>
+        <div class="map-coords" id="map-coords">25.958700 N / 49.677500 E</div>
+      </div>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-tag">AOI 04 &middot; EASTERN PROVINCE</div>
+        <div class="map-legend">
+          <span><i class="swatch pipeline"></i>Pipeline</span>
+          <span><i class="swatch scan"></i>Camera reading</span>
+          <span><i class="swatch leak-open"></i>Leak detected</span>
+          <span><i class="swatch leak-fixing"></i>Repair en route</span>
+          <span><i class="swatch leak-fixed"></i>Repaired / verified</span>
+          <span><i class="swatch repair-unit"></i>Repair unit</span>
+          <span class="legend-sectors">
+            <i style="--c:#3aa0ff"></i>N<i style="--c:#2ecc71"></i>E<i style="--c:#ffb066"></i>S<i style="--c:#ff5a4d"></i>W
+          </span>
+        </div>
+        <div class="map-readout">
+          <div><span>WIND</span><strong>5.2 m/s NW</strong></div>
+          <div><span>NETWORK</span><strong id="network-length">-- km</strong></div>
+          <div><span>WAYPOINTS</span><strong id="waypoint-count">--</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right-stack">
+      <section class="panel camera-panel">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">PAYLOAD / OGI MWIR</span>
+            <h2>Live thermal feed</h2>
+          </div>
+          <span class="rec"><i></i>REC</span>
+        </div>
+        <div class="feed-tabs" id="feed-tabs">
+          <button class="feed-tab" data-drone="N" style="--c:#3aa0ff"><i></i>N &middot; North</button>
+          <button class="feed-tab" data-drone="E" style="--c:#2ecc71"><i></i>E &middot; East</button>
+          <button class="feed-tab" data-drone="S" style="--c:#ffb066"><i></i>S &middot; South</button>
+          <button class="feed-tab" data-drone="W" style="--c:#ff5a4d"><i></i>W &middot; West</button>
+        </div>
+        <div class="feed-shell">
+          <img id="feed" alt="Simulated OGI thermal camera feed" />
+          <div class="feed-grid"></div>
+          <div class="feed-corners"><span></span><span></span><span></span><span></span></div>
+          <div class="feed-alert" id="feed-alert">METHANE PLUME DETECTED</div>
+          <div class="feed-caption">
+            <span id="feed-mode">ROUTINE SCAN</span>
+            <span id="feed-drone">N &middot; NORTH</span>
+            <span id="feed-model">U-NET / RESNET34</span>
+          </div>
+        </div>
+        <div class="feed-thumbs" id="feed-thumbs">
+          <button class="feed-thumb" data-drone="N" style="--c:#3aa0ff"><img alt="North drone camera" /><span>N</span></button>
+          <button class="feed-thumb" data-drone="E" style="--c:#2ecc71"><img alt="East drone camera" /><span>E</span></button>
+          <button class="feed-thumb" data-drone="S" style="--c:#ffb066"><img alt="South drone camera" /><span>S</span></button>
+          <button class="feed-thumb" data-drone="W" style="--c:#ff5a4d"><img alt="West drone camera" /><span>W</span></button>
+        </div>
+        <div class="camera-stats">
+          <div><span>PLUME AREA</span><strong id="gas-ratio">0.00%</strong><div class="mini-bar"><i id="gas-bar"></i></div></div>
+          <div><span>CONFIDENCE</span><strong id="gas-conf">0.0%</strong></div>
+          <div><span>INFERENCE</span><strong id="infer-ms">-- ms</strong></div>
+          <div><span>READINGS</span><strong id="scan-count">0</strong></div>
+        </div>
+      </section>
+
+      <section class="panel telemetry-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="eyebrow">FLIGHT TELEMETRY &middot; <b id="tm-drone">N &middot; NORTH</b></span>
+            <h2>Drone state</h2>
+          </div>
+          <span class="live-dot">LIVE</span>
+        </div>
+        <div class="fleet-strip" id="fleet-strip"></div>
+        <div class="telemetry-grid">
+          <div class="telemetry-item wide">
+            <span>GPS POSITION</span>
+            <strong id="gps">--</strong>
+          </div>
+          <div class="telemetry-item"><span>ALTITUDE AGL</span><strong id="alt">25 m</strong></div>
+          <div class="telemetry-item"><span>HEADING</span><strong id="heading">000&deg;</strong></div>
+          <div class="telemetry-item"><span>GROUND SPEED</span><strong id="ground-speed">18 m/s</strong></div>
+          <div class="telemetry-item"><span>ROUTE LEG</span><strong id="leg">0 / 14</strong></div>
+        </div>
+        <div class="battery-block">
+          <div class="battery-label"><span>BATTERY</span><strong id="battery-text">100%</strong></div>
+          <div class="battery-track"><i id="battery-fill"></i></div>
+        </div>
+        <div class="compass-row">
+          <div class="compass">
+            <div class="compass-needle" id="compass-needle"></div>
+            <span class="n">N</span><span class="e">E</span><span class="s">S</span><span class="w">W</span>
+          </div>
+          <div class="compass-copy">
+            <span>ONBOARD SENSORS</span>
+            <p>OGI camera &middot; TDLAS methane sensor &middot; RTK GPS &middot; LiDAR altimeter</p>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <section class="metrics-row">
+    <article class="panel metric"><span>PIPELINE COVERAGE</span><strong id="stat-coverage">0.0%</strong><div class="metric-bar"><i id="coverage-bar"></i></div><small id="stat-coverage-note">of -- km network</small></article>
+    <article class="panel metric"><span>LEAKS CONFIRMED</span><strong id="stat-leaks">0 / 4</strong><small>AI + GWO source refinement</small></article>
+    <article class="panel metric"><span>AVG GPS ERROR</span><strong id="stat-error">-- m</strong><small id="stat-refined">GWO refined: -- m</small></article>
+    <article class="panel metric"><span>EST. EMISSIONS</span><strong id="stat-emissions">0 kg/h</strong><small>sum of detected sources</small></article>
+    <article class="panel metric"><span>DISTANCE FLOWN</span><strong id="stat-distance">0.0 km</strong><small id="stat-time">flight time 0.0 min</small></article>
+    <article class="panel metric"><span>REPAIRS</span><strong id="stat-repairs">0 / 0</strong><small id="stat-repair-note">response -- min · avoided -- kg</small></article>
+  </section>
+
+  <section class="lower-row">
+    <article class="panel ga-panel">
+      <div class="panel-head compact">
+        <div>
+          <span class="eyebrow">GENETIC ALGORITHM</span>
+          <h2>Route optimization</h2>
+        </div>
+        <span class="improvement" id="ga-improvement">--%</span>
+      </div>
+      <div class="ga-numbers">
+        <div><span>BASELINE</span><strong id="ga-baseline">-- km</strong></div>
+        <div><span>OPTIMIZED</span><strong id="ga-optimized">-- km</strong></div>
+        <div><span>FLIGHT TIME</span><strong id="ga-time">-- min</strong></div>
+      </div>
+      <div class="chart-wrap"><canvas id="ga-chart"></canvas></div>
+      <p class="ga-note">4 sector routes (N/E/S/W) &middot; population 80 &middot; 140 generations &middot; ordered crossover + 2-opt</p>
+    </article>
+
+    <article class="panel orders-panel">
+      <div class="panel-head compact">
+        <div>
+          <span class="eyebrow">RESPONSE</span>
+          <h2>Repair work orders</h2>
+        </div>
+        <span class="order-count" id="order-count">0</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>WO</th><th>Drone</th><th>Priority</th><th>Crew</th><th>Rate</th><th>ETA</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody id="orders-body">
+            <tr class="empty"><td colspan="8">No detections yet. Launch a drone to begin inspection.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="model-line" id="model-line">Model: loading...</div>
+    </article>
+  </section>
+
+  <section class="panel log-panel">
+    <div class="panel-head compact">
+      <div>
+        <span class="eyebrow">MISSION LOG</span>
+        <h2>Event stream</h2>
+      </div>
+      <span class="log-count" id="log-count">0 events</span>
+    </div>
+    <div class="log-stream" id="log-stream"></div>
+  </section>
+
+  <script src="/static/vendor/leaflet.js"></script>
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/app.js?v=8"></script>
+</body>
+</html>
